@@ -3,13 +3,7 @@ import pandas as pd
 from pathlib import Path
 
 # testing pre-using the crime index but i made a file in data/external to store the actual weights
-DEFAULT_HARM_WEIGHTS = {
-    "Anti-social behaviour": 1,
-    "Bicycle theft": 2,
-    "Burglary": 5,
-    "Drugs": 3,
-    "Other crime": 2
-}
+DEFAULT_HARM_WEIGHTS = None # currently left out as none but some fx can break, but we first need to settle weights 
 
 
 def build_lsoa_month_demand(

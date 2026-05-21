@@ -1,0 +1,10 @@
+pandas
+duckdb
+pyarrow
+matplotlib
+scikit-learn
+statsmodels
+jupyter
+ipykernel
+plotly
+nbformat
