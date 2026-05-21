@@ -1,6 +1,7 @@
 *.parquet
 *.csv
 *.zip
+*.xlsx
 
 outputs/figures/
 outputs/tables/
