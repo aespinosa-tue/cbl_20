@@ -6,7 +6,7 @@
 *.prj
 *.shp
 *.shx
-
+ 
 outputs/figures/
 outputs/tables/
 outputs/dashboard/
