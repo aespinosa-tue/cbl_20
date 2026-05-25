@@ -6,10 +6,12 @@
 *.prj
 *.shp
 *.shx
- 
+
 outputs/figures/
 outputs/tables/
 outputs/dashboard/
 
 __pycache__/
 .ipynb_checkpoints/
+*.pyc
+.vscode/
