@@ -32,7 +32,35 @@ def load_lsoa_centroids(
     lat_col: str = "LAT",
     lon_col: str = "LONG",
 ) -> pd.DataFrame:
-    """Load the ONS LSOA 2021 BGC CSV and standardise column names."""
+    """
+    Load the ONS LSOA 2021 BGC CSV and standardise the useful columns.
+
+    Parameters
+    ----------
+    csv_path:
+        Path to the ONS LSOA CSV file.
+    code_col, name_col, easting_col, northing_col, lat_col, lon_col:
+        Column names in the source file.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns:
+        - lsoa_code
+        - lsoa_name
+        - bng_e
+        - bng_n
+        - lat
+        - lon
+        - shape_area, if available
+        - shape_length, if available
+
+    Notes
+    -----
+    This file contains centroid coordinates, not polygon geometry.
+    Therefore, it supports centroid-distance neighbours, not true
+    touching-boundary adjacency.
+    """
     csv_path = Path(csv_path)
 
     if not csv_path.exists():
@@ -43,7 +71,8 @@ def load_lsoa_centroids(
     missing = REQUIRED_LSOA_CSV_COLUMNS - set(df.columns)
     if missing:
         raise ValueError(
-            "The LSOA CSV is missing required columns: " + ", ".join(sorted(missing))
+            "The LSOA CSV is missing required columns: "
+            + ", ".join(sorted(missing))
         )
 
     out = pd.DataFrame(
@@ -76,7 +105,9 @@ def validate_lsoa_code_coverage(
     *,
     code_col: str = "lsoa_code",
 ) -> dict:
-    """Check how many model LSOA codes are present in the spatial reference."""
+    """
+    Check how many model LSOA codes are covered by the spatial reference file.
+    """
     model_codes = set(pd.Series(list(model_lsoas)).dropna().astype(str))
     ref_codes = set(lsoa_reference[code_col].dropna().astype(str))
 
@@ -102,7 +133,19 @@ def build_knn_adjacency_from_centroids(
     easting_col: str = "bng_e",
     northing_col: str = "bng_n",
 ) -> pd.DataFrame:
-    """Centroid-distance k-nearest-neighbour table using BNG coordinates."""
+    """
+    Build a centroid-distance k-nearest-neighbour table.
+
+    Returns columns:
+    - lsoa_code
+    - neighbour_lsoa_code
+    - neighbour_rank
+    - distance_m
+    - adjacency_method
+
+    This is NOT true boundary adjacency. It is a distance-based proxy using
+    British National Grid centroid coordinates.
+    """
     if k < 1:
         raise ValueError("k must be at least 1.")
 
@@ -117,17 +160,19 @@ def build_knn_adjacency_from_centroids(
     )
 
     if len(ref) <= k:
-        raise ValueError(f"Need more LSOAs than k. Got {len(ref)} LSOAs and k={k}.")
+        raise ValueError(
+            f"Need more LSOAs than k. Got {len(ref)} LSOAs and k={k}."
+        )
 
     coords = ref[[easting_col, northing_col]].to_numpy(dtype=float)
     codes = ref[code_col].astype(str).to_numpy()
 
-    # k+1 because each point's nearest neighbour is itself.
+    # k + 1 because the nearest neighbour of each point is itself.
     if BallTree is not None:
         tree = BallTree(coords, metric="euclidean")
         distances, indices = tree.query(coords, k=k + 1)
     else:
-        # Fallback for environments without sklearn.
+        # Fallback for environments without sklearn. Fine for small subsets.
         diff = coords[:, None, :] - coords[None, :, :]
         dist_matrix = np.sqrt((diff**2).sum(axis=2))
         indices = np.argsort(dist_matrix, axis=1)[:, : k + 1]
@@ -168,7 +213,16 @@ def build_radius_adjacency_from_centroids(
     easting_col: str = "bng_e",
     northing_col: str = "bng_n",
 ) -> pd.DataFrame:
-    """Centroid-distance radius-neighbour table using BNG coordinates."""
+    """
+    Build a centroid-distance radius-neighbour table.
+
+    Returns columns:
+    - lsoa_code
+    - neighbour_lsoa_code
+    - neighbour_rank
+    - distance_m
+    - adjacency_method
+    """
     if radius_m <= 0:
         raise ValueError("radius_m must be positive.")
 
@@ -233,6 +287,7 @@ def build_radius_adjacency_from_centroids(
 
 
 def summarize_adjacency(adjacency: pd.DataFrame) -> dict:
+    """Summarise an adjacency/neighbour table."""
     if adjacency.empty:
         return {
             "n_edges": 0,
@@ -254,6 +309,7 @@ def summarize_adjacency(adjacency: pd.DataFrame) -> dict:
 
 
 def add_previous_month_count(panel: pd.DataFrame) -> pd.DataFrame:
+    """Add previous-month own-LSOA count."""
     out = panel.copy()
     out = out.sort_values(["lsoa_code", "month"])
     out["prev_month_count"] = (
@@ -270,12 +326,18 @@ def add_neighbour_previous_month_feature(
     output_col: str = "neighbour_prev_month_count",
     scale_output: bool = True,
 ) -> pd.DataFrame:
-    """Average previous-month crime count across each LSOA's neighbours."""
+    """
+    Add an adjacency-aware previous-month neighbour feature.
+
+    For each LSOA-month row, this computes the average previous-month crime
+    count among neighbouring LSOAs.
+    """
     required_panel_cols = {"lsoa_code", "month", "crime_count"}
     missing_panel = required_panel_cols - set(panel.columns)
     if missing_panel:
         raise ValueError(
-            "Panel is missing required columns: " + ", ".join(sorted(missing_panel))
+            "Panel is missing required columns: "
+            + ", ".join(sorted(missing_panel))
         )
 
     required_adj_cols = {"lsoa_code", "neighbour_lsoa_code"}
@@ -288,7 +350,9 @@ def add_neighbour_previous_month_feature(
 
     out = add_previous_month_count(panel)
 
-    neighbour_values = out[["lsoa_code", "month", neighbour_value_col]].rename(
+    neighbour_values = out[
+        ["lsoa_code", "month", neighbour_value_col]
+    ].rename(
         columns={
             "lsoa_code": "neighbour_lsoa_code",
             neighbour_value_col: "neighbour_value",
@@ -302,7 +366,8 @@ def add_neighbour_previous_month_feature(
     )
 
     neighbour_avg = (
-        expanded.groupby(["lsoa_code", "month"], as_index=False)["neighbour_value"]
+        expanded
+        .groupby(["lsoa_code", "month"], as_index=False)["neighbour_value"]
         .mean()
         .rename(columns={"neighbour_value": output_col})
     )
@@ -322,6 +387,7 @@ def add_neighbour_previous_month_feature(
 
 
 def save_adjacency(adjacency: pd.DataFrame, output_path: str | Path) -> Path:
+    """Save adjacency table to CSV."""
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     adjacency.to_csv(output_path, index=False)
@@ -329,6 +395,7 @@ def save_adjacency(adjacency: pd.DataFrame, output_path: str | Path) -> Path:
 
 
 def load_adjacency(adjacency_path: str | Path) -> pd.DataFrame:
+    """Load a previously saved adjacency table."""
     adjacency_path = Path(adjacency_path)
     if not adjacency_path.exists():
         raise FileNotFoundError(f"Adjacency file not found: {adjacency_path}")

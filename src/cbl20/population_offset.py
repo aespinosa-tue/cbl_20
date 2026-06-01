@@ -1,4 +1,25 @@
 
+"""
+Convert ONS LSOA broad-age population estimate Excel workbooks to a clean yearly Parquet file.
+
+This parser is tailored to ONS broad-age LSOA workbooks whose population sheets
+look like:
+    row 1-3: title/notes
+    row 4:   headers, including "LSOA 2021 Code", "LSOA 2021 Name", "Total"
+    row 5+:  data
+
+Output schema:
+    lsoa_code
+    lsoa_name
+    population_year
+    population
+    source_file
+    source_sheet
+
+Run from repo root:
+    python -m src.cbl20.population_offset
+"""
+
 from __future__ import annotations
 
 import argparse
